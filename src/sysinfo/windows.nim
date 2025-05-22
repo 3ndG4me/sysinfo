@@ -1,56 +1,71 @@
 import common, strutils, osproc
 
-proc wmic(sub, key: string): string =
-  let (outp, _) = execCmdEx("wmic " & sub & " get " & key)
-  return outp.strip().split("\n")[^1].strip()
+proc tryParseInt(s: string): int =
+  try:
+    result = parseInt(s)
+  except ValueError:
+    result = 0
+
+proc tryParseUInt64(s: string): uint64 =
+  try:
+    result = parseBiggestUInt(s)
+  except ValueError:
+    result = 0'u64
+
+proc powershell(query: string): string =
+  let (outp, _) = execCmdEx("powershell -NoProfile -Command " & query)
+  return outp.strip().splitLines[^1].strip()
 
 proc getMachineGuid*(): string =
-  wmic("path win32_computersystemproduct", "uuid")
+  powershell("(Get-CimInstance -Class Win32_ComputerSystemProduct).UUID")
 
 proc getMachineModel*(): string =
-  wmic("computersystem", "model")
+  powershell("(Get-CimInstance -Class Win32_ComputerSystem).Model")
 
 proc getMachineName*(): string =
-  wmic("computersystem", "name")
+  powershell("(Get-CimInstance -Class Win32_ComputerSystem).Name")
 
 proc getMachineManufacturer*(): string =
-  wmic("computersystem", "manufacturer")
+  powershell("(Get-CimInstance -Class Win32_ComputerSystem).Manufacturer")
 
 proc getOsName*(): string =
-    wmic("os", "Name").split("|")[0]
+  powershell("(Get-CimInstance -Class Win32_OperatingSystem).Name.Split('|')[0]")
 
 proc getOsVersion*(): string =
-  wmic("os", "Version")
+  powershell("(Get-CimInstance -Class Win32_OperatingSystem).Version")
 
 proc getOsSerialNumber*(): string =
-  wmic("os", "SerialNumber")
+  powershell("(Get-CimInstance -Class Win32_OperatingSystem).SerialNumber")
 
 proc getCpuName*(): string =
-  wmic("cpu", "Name")
+  powershell("(Get-CimInstance -Class Win32_Processor).Name")
 
 proc getCpuManufacturer*(): string =
-  wmic("cpu", "manufacturer")
+  powershell("(Get-CimInstance -Class Win32_Processor).Manufacturer")
 
 proc getNumCpus*(): int =
-  tryParseInt wmic("computersystem", "NumberOfProcessors")
+  tryParseInt(powershell("(Get-CimInstance -Class Win32_ComputerSystem).NumberOfProcessors"))
 
 proc getNumTotalCores*(): int =
-  tryParseInt wmic("computersystem", "NumberOfLogicalProcessors")
+  tryParseInt(powershell("(Get-CimInstance -Class Win32_ComputerSystem).NumberOfLogicalProcessors"))
 
 proc getCpuGhz*(): float =
-  parseFloat(wmic("cpu", "MaxClockSpeed")) / 1000.0
+  try:
+    parseFloat(powershell("(Get-CimInstance -Class Win32_Processor).MaxClockSpeed")) / 1000.0
+  except ValueError:
+    0.0
 
 proc getTotalMemory*(): uint64 =
-  uint64 tryParseInt wmic("computersystem", "TotalPhysicalMemory")
+  tryParseUInt64(powershell("(Get-CimInstance -Class Win32_ComputerSystem).TotalPhysicalMemory"))
 
 proc getFreeMemory*(): uint64 =
-  uint64 tryParseInt wmic("os", "FreePhysicalMemory")
+  (tryParseUInt64(powershell("(Get-CimInstance -Class Win32_OperatingSystem).FreePhysicalMemory"))) * 1024
 
 proc getGpuName*(): string =
-  wmic("path win32_VideoController", "name")
+  powershell("(Get-CimInstance -Class Win32_VideoController)[0].Name")
 
 proc getGpuDriverVersion*(): string =
-  wmic("path win32_VideoController", "DriverVersion")
+  powershell("(Get-CimInstance -Class Win32_VideoController)[0].DriverVersion")
 
 proc getGpuMaxFPS*(): int =
-  tryParseInt wmic("path win32_VideoController", "MaxRefreshRate")
+  tryParseInt(powershell("(Get-CimInstance -Class Win32_VideoController)[0].MaxRefreshRate"))
